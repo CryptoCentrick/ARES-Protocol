@@ -5,14 +5,22 @@ import {ITimeLock} from "../interfaces/ITimeLock.sol";
 import {IProposalManager as IProposal} from "../interfaces/IProposalManager.sol";
 import {AttackDefender} from "../libraries/AttackDefender.sol";
 
-    abstract contract TimeLock is ITimeLock {
+interface ITreasuryExecutor {
+    function executeProposal(
+        address _target,
+        uint256 _value,
+        bytes calldata _data
+    ) external returns (bool);
+}
+
+    contract TimeLock is ITimeLock {
 
     mapping(bytes32 => ITimeLock.TimeLocked) private _entries;
 
     IProposal private _proposal;
     address private _treasury;
 
-    uint256 public constant TIMELOCK_DELAY = 48 hours;
+    uint256 public constant TIMELOCK_DELAY = 24 hours;
 
     bool private _locked;
 
@@ -76,7 +84,11 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
 
         entry.timeLockStatus = ITimeLock.TimeLockedStatus.EXECUTED;
 
-        (bool success, ) = _treasury.call{value: proposal.value}(proposal.data);
+        bool success = ITreasuryExecutor(_treasury).executeProposal(
+            proposal.target,
+            proposal.value,
+            proposal.data
+        );
         require(success, "execution failed");
 
         emit TimeLockedExecuted(_proposalId, entry.startedAt);
@@ -98,7 +110,7 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
         return _entries[_proposalId].startedAt;
     }
 
-    function getTimeLockStatus(bytes32 _proposalId) external view {
+    function getTimelockStatus(bytes32 _proposalId) external override {
         require(_entries[_proposalId].startedAt != 0, "entry does not exist");
     }
 

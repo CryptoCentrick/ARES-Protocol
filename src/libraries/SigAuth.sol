@@ -4,18 +4,24 @@ pragma solidity ^0.8.20;
 library SigAuth {
 
     bytes32 public constant APPROVAL_TYPEHASH = keccak256(
-        "Approval(bytes32 proposalId,address signer,uint nonce,uint deadline)"
+        bytes("Approval(bytes32 proposalId,address signer,uint nonce,uint deadline)")
     );
 
 
     function getDomainSeparator() internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            keccak256("EIP712Domain(string _name, string version, uint chainId, address verifyingContract)"),
-            keccak256("ARES Protocol"),
-            keccak256("1"),
-            block.chainid,     
-            address(this)      
-        ));
+        return keccak256(
+            abi.encode(
+                keccak256(
+                    bytes(
+                        "EIP712Domain(string name,string version,uint chainId,address verifyingContract)"
+                    )
+                ),
+                keccak256(bytes("ARES Protocol")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
     function getStructHash(

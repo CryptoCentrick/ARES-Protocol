@@ -90,7 +90,7 @@ contract AresProtocolTest is Test {
 
         assertEq(
             uint256(timeLock.getTimeLockEntry(proposalId).timeLockStatus),
-            uint256(ITimeLock.TimelockedState.EXECUTED)
+            uint256(ITimeLock.TimeLockedStatus.EXECUTED)
         );
     }
 
@@ -116,7 +116,7 @@ contract AresProtocolTest is Test {
 
         assertEq(
             uint256(timeLock.getTimeLockEntry(proposalId).timeLockStatus),
-            uint256(ITimeLock.TimelockedState.EXECUTED)
+            uint256(ITimeLock.TimeLockedStatus.EXECUTED)
         );
     }
 
@@ -128,7 +128,7 @@ contract AresProtocolTest is Test {
         rewardDistributor.claimReward(samuel, samuelAmount, proof);
 
         assertEq(usdcAddr.balanceOf(samuel) - before, samuelAmount);
-        assertTrue(rewardDistributor.hasClaimedReward(samuel));
+        assertTrue(rewardDistributor.hasClaimed(samuel));
     }
 
     function test_RevertWhen_Reentrancy() public {
@@ -271,7 +271,7 @@ contract AresProtocolTest is Test {
     function _getStatus(
         bytes32 _proposalId
     ) internal view returns (IProposalManager.ProposalStatus) {
-        return proposal.getProposalById(_proposalId).proposal_status;
+        return proposal.getProposalById(_proposalId).state;
     }
 
     function _signProposal(

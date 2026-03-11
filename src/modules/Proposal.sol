@@ -55,13 +55,13 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
             target: _target,
             proposer: msg.sender,
             data: _data,
-            state: state,
+            state: ProposalStatus.PENDING,
             desc: _desc,
             value: _value,
             timeCreated: block.timestamp
         });
 
-        emit ProposalCreated(proposalId, state);
+        emit ProposalCreated(proposalId, ProposalStatus.PENDING);
 
         return proposalId;
     }
@@ -75,7 +75,13 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
         return _proposals[_proposalId];
     }
 
-    function queueProposal(bytes32 _proposalId) external override {
+    function queueProposal(
+        bytes32 _proposalId,
+        address[] calldata signers,
+        bytes[] calldata signatures,
+        uint256[] calldata signerNonces,
+        uint256 deadline
+    ) external override {
         require(_proposals[_proposalId].timeCreated != 0, "proposal does not exist");
 
         IProposalManager.Proposal storage proposal = _proposals[_proposalId];
@@ -91,6 +97,58 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
             block.timestamp >= proposal.timeCreated + LOCK_PERIOD,
             "still in commit phase"
         );
+
+        require(block.timestamp <= deadline, "signatures expired");
+        require(
+            signers.length == signatures.length &&
+                signers.length == signerNonces.length,
+            "length mismatch"
+        );
+
+        address[] memory validSigners = new address[](signers.length);
+        uint256 validSignerCount = 0;
+
+        for (uint256 i = 0; i < signers.length; i++) {
+            address signer = signers[i];
+
+            if (!_authorizedSigners[signer]) {
+                continue;
+            }
+
+            bool duplicate = false;
+            for (uint256 j = 0; j < i; j++) {
+                if (signers[j] == signer) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (duplicate) {
+                continue;
+            }
+
+            if (signerNonces[i] != _nonces[signer]) {
+                continue;
+            }
+
+            address recovered = SigAuth.recoverSigner(
+                _proposalId,
+                signer,
+                signerNonces[i],
+                deadline,
+                signatures[i]
+            );
+
+            if (recovered == signer) {
+                validSigners[validSignerCount] = signer;
+                validSignerCount++;
+            }
+        }
+
+        require(validSignerCount >= _requiredVotes, "insufficient signatures");
+
+        for (uint256 i = 0; i < validSignerCount; i++) {
+            _nonces[validSigners[i]]++;
+        }
 
         proposal.state = ProposalStatus.QUEUED;
 

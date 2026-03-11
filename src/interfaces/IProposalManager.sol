@@ -30,9 +30,15 @@ interface IProposalManager {
 
     function createProposal(address _target, bytes calldata _data, uint _value, string memory _desc, ProposalStatus state) external payable returns (bytes32);
 
-    function getProposalById(bytes32 _proposalId) external returns (Proposal memory);
+    function getProposalById(bytes32 _proposalId) external view returns (Proposal memory);
 
-    function queueProposal(bytes32 _proposalId) external;
+    function queueProposal(
+        bytes32 _proposalId,
+        address[] calldata signers,
+        bytes[] calldata signatures,
+        uint256[] calldata signerNonces,
+        uint256 deadline
+    ) external;
 
     function cancelProposal(bytes32 _proposalId) external;
 
