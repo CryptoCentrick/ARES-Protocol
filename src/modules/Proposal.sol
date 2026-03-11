@@ -5,17 +5,18 @@ import {IProposalManager} from "../interfaces/IProposalManager.sol";
 import {SigAuth} from "../libraries/SigAuth.sol";
 import {AttackDefender} from "../libraries/AttackDefender.sol";
 
-abstract contract Proposal is IProposalManager {
-    mapping(bytes32 => Proposal) private _proposals;
-    mapping(address => uint) private _nonces;
+    contract Proposal is IProposalManager {
+        
+    mapping(bytes32 => IProposalManager.Proposal) private _proposals;
+    mapping(address => uint256) private _nonces;
     mapping(address => bool) private _authorizedSigners;
-    mapping(bytes32 => uint) private _deposits;
+    mapping(bytes32 => uint256) private _deposits;
 
-    uint private _quorum;
+    uint256 private _requiredVotes;
 
-    uint private constant COMMIT_DELAY = 1 hours;
+    uint256 private constant LOCK_PERIOD = 1 hours;
 
-    uint private constant PROPOSAL_DEPOSIT = 1 ether;
+    uint256 private constant PROPOSAL_FEE = 0.1 ether;
 
     constructor(address[] memory _signers, uint256 _thresh) {
         require(_thresh > 0, "quorum cannot be zero");
@@ -24,78 +25,86 @@ abstract contract Proposal is IProposalManager {
         for (uint256 i = 0; i < _signers.length; i++) {
             _authorizedSigners[_signers[i]] = true;
         }
-        _quorum = _thresh;
+        _requiredVotes = _thresh;
     }
 
     function createProposal(
         address _target,
         bytes calldata _data,
-        uint256 _value,
-        string calldata _description,
-        IProposal.ProposalType _proposalType
-    ) external payable returns (bytes32) {
-        require(msg.value >= PROPOSAL_DEPOSIT, "insufficient deposit");
-
-        bytes32 proposalId = keccak256(abi.encodePacked(
+        uint _value,
+        string memory _desc,
+        ProposalStatus state
+    ) external payable override returns (bytes32) {
+        bytes32 proposalId = keccak256(
+            abi.encodePacked(
             msg.sender,
             block.timestamp,
             _target,
             _data,
             _value,
-            _description,
-            _proposalType
-        ));
+            _desc,
+            state
+        )
+        );
 
-        require(_proposals[proposalId].time_created == 0, "proposal already exists");
+        require(_proposals[proposalId].timeCreated == 0, "proposal already exists");
 
         _deposits[proposalId] = msg.value;
 
-        _proposals[proposalId] = Proposal({
-            proposalId: proposalId,
+        _proposals[proposalId] = IProposalManager.Proposal({
             target: _target,
-            data: _data,
-            value: _value,
             proposer: msg.sender,
-            time_created: block.timestamp,
-            desc: _description,
-            proposal_status: ProposalState.PENDING,
-            proposal_type: _proposalType
+            data: _data,
+            state: state,
+            desc: _desc,
+            value: _value,
+            timeCreated: block.timestamp
         });
 
-        emit ProposalCreated(
-            proposalId,
-            _proposalType,
-            ProposalState.PENDING
-        );
+        emit ProposalCreated(proposalId, state);
 
         return proposalId;
     }
 
-    function queueProposal(bytes32 _proposalId) external {
-        require(_proposals[_proposalId].time_created != 0, "proposal does not exist");
+    function getProposalById(bytes32 _proposalId)
+        external view
+        override
+        returns (IProposalManager.Proposal memory)
+    {
+        require(_proposals[_proposalId].timeCreated != 0, "proposal does not exist");
+        return _proposals[_proposalId];
+    }
 
-        Proposal storage proposal = _proposals[_proposalId];
+    function queueProposal(bytes32 _proposalId) external override {
+        require(_proposals[_proposalId].timeCreated != 0, "proposal does not exist");
 
-        require(proposal.proposal_status == ProposalState.PENDING, "proposal is not pending");
+        IProposalManager.Proposal storage proposal = _proposals[_proposalId];
 
         require(
-            block.timestamp >= proposal.time_created + COMMIT_DELAY,
+            proposal.state != ProposalStatus.QUEUED &&
+                proposal.state != ProposalStatus.EXECUTED &&
+                proposal.state != ProposalStatus.CANCELED,
+            "proposal is not pending"
+        );
+
+        require(
+            block.timestamp >= proposal.timeCreated + LOCK_PERIOD,
             "still in commit phase"
         );
 
-        proposal.proposal_status = ProposalState.QUEUED;
+        proposal.state = ProposalStatus.QUEUED;
 
-        emit ProposalQueued(_proposalId, proposal.proposal_status);
+        emit ProposalQueued(_proposalId, proposal.state);
     }
 
-    function cancelProposal(bytes32 _proposalId) external {
-        require(_proposals[_proposalId].time_created != 0, "proposal does not exist");
+    function cancelProposal(bytes32 _proposalId) external override {
+        require(_proposals[_proposalId].timeCreated != 0, "proposal does not exist");
 
-        Proposal storage proposal = _proposals[_proposalId];
+        IProposalManager.Proposal storage proposal = _proposals[_proposalId];
 
         require(
-            proposal.proposal_status == ProposalState.PENDING ||
-            proposal.proposal_status == ProposalState.QUEUED,
+            proposal.state != ProposalStatus.EXECUTED &&
+                proposal.state != ProposalStatus.CANCELED,
             "proposal cannot be cancelled"
         );
 
@@ -104,28 +113,22 @@ abstract contract Proposal is IProposalManager {
             "not authorized to cancel"
         );
 
-        proposal.proposal_status = ProposalState.CANCELED;
+        proposal.state = ProposalStatus.CANCELED;
 
         uint256 deposit = _deposits[_proposalId];
         delete _deposits[_proposalId];
-        (bool success, ) = payable(proposal.proposer).call{value: deposit}("");
-        require(success, "refund failed");
 
-        emit ProposalCanceled(_proposalId, proposal.proposal_status);
+        if (deposit != 0) {
+            (bool success, ) = payable(proposal.proposer).call{value: deposit}("");
+            require(success, "refund failed");
+        }
+
+        emit ProposalCanceled(_proposalId, proposal.state);
     }
 
-    function getProposal(bytes32 _proposalId) 
-        external 
-        view 
-        returns (Proposal memory) 
-    {
-        require(_proposals[_proposalId].time_created != 0, "proposal does not exist");
-        return _proposals[_proposalId];
-    }
-
-    function isReadyToQueue(bytes32 _proposalId) external view returns (bool) {
-        Proposal storage proposal = _proposals[_proposalId];
-        require(proposal.time_created != 0, "proposal does not exist");
-        return block.timestamp >= proposal.time_created + COMMIT_DELAY;
+    function readyToQueue(bytes32 _proposalId) external view override returns (bool) {
+        IProposalManager.Proposal storage proposal = _proposals[_proposalId];
+        require(proposal.timeCreated != 0, "proposal does not exist");
+        return block.timestamp >= proposal.timeCreated + LOCK_PERIOD;
     }
 }

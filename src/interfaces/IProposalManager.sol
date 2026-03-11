@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.20;
 
 interface IProposalManager {
    
@@ -7,6 +7,7 @@ interface IProposalManager {
         TRANSFER,
         CALL,
         UPGRADE,
+        PENDING,
         QUEUED,
         EXECUTED,
         CANCELED
@@ -27,7 +28,7 @@ interface IProposalManager {
     event ProposalQueued(bytes32 indexed proposalId, ProposalStatus indexed state);
     event ProposalCanceled(bytes32 indexed proposalId, ProposalStatus indexed state);
 
-    function createProposal(address _target, bytes calldata _data, uint _value, string memory _desc, ProposalStatus state) external returns (bytes32);
+    function createProposal(address _target, bytes calldata _data, uint _value, string memory _desc, ProposalStatus state) external payable returns (bytes32);
 
     function getProposalById(bytes32 _proposalId) external returns (Proposal memory);
 

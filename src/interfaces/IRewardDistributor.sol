@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.20;
 
 interface IRewardDistributor {
 
@@ -14,7 +14,5 @@ interface IRewardDistributor {
    function claimReward(address recipient, uint amount, bytes32[] calldata proof) external;
 
    function isClaimed (uint index) external view returns (bool);
-
-
 
 }
