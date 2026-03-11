@@ -7,7 +7,6 @@ import {TimeLock} from "../src/modules/TimeLock.sol";
 import {DistributeReward} from "../src/modules/DistributeReward.sol";
 import {AresProtocol} from "../src/core/AresProtocol.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
-import {IRewardDistributor} from "../src/interfaces/IRewardDistributor.sol";
 import {IProposalManager} from "../src/interfaces/IProposalManager.sol";
 import {ITimeLock} from "../src/interfaces/ITimeLock.sol";
 

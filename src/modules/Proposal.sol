@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {IProposalManager} from "../interfaces/IProposalManager.sol";
 import {SigAuth} from "../libraries/SigAuth.sol";
-import {AttackDefender} from "../libraries/AttackDefender.sol";
 
     contract Proposal is IProposalManager {
         
@@ -15,8 +14,6 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
     uint256 private _requiredVotes;
 
     uint256 private constant LOCK_PERIOD = 1 hours;
-
-    uint256 private constant PROPOSAL_FEE = 0.1 ether;
 
     constructor(address[] memory _signers, uint256 _thresh) {
         require(_thresh > 0, "quorum cannot be zero");
@@ -98,7 +95,6 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
             "still in commit phase"
         );
 
-        require(block.timestamp <= deadline, "signatures expired");
         require(
             signers.length == signatures.length &&
                 signers.length == signerNonces.length,
@@ -145,6 +141,7 @@ import {AttackDefender} from "../libraries/AttackDefender.sol";
         }
 
         require(validSignerCount >= _requiredVotes, "insufficient signatures");
+        require(block.timestamp <= deadline, "signatures expired");
 
         for (uint256 i = 0; i < validSignerCount; i++) {
             _nonces[validSigners[i]]++;
